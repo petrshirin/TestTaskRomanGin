@@ -28,9 +28,27 @@ class DataBase:
         return row
 
     async def create_post(self, data):
-        await self.conn.execute(f'''INSERT INTO posts (title, body, author, created_at) 
-                                   VALUES ($1, $2, $3, TIMESTAMP '{data['created_at']}')''',
-                                data['title'], data['body'], data['author'])
+        try:
+            await self.conn.execute(f'''INSERT INTO posts (title, body, author, created_at) 
+                                       VALUES ($1, $2, $3, TIMESTAMP '{data['created_at']}')''',
+                                    data['title'], data['body'], data['author'])
+            return True
+        except Exception as err:
+            print(err)
+            return False
+
+    async def edit_post(self, data, post_id):
+        try:
+            await self.conn.execute(f'''UPDATE posts SET title = $1,
+                                                         body = $2,
+                                                         author = $3,
+                                                         TIMESTAMP '{data['created_at']}'
+                                        WHERE id = $4''',
+                                    data['title'], data['body'], data['author'], post_id)
+            return True
+        except Exception as err:
+            print(err)
+            return False
 
     async def close(self):
         await self.conn.close()
