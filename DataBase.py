@@ -12,7 +12,7 @@ class DataBase:
         self.conn = pool
         print(dir(self.conn))
 
-    async def create_table(self):
+    async def init_database(self):
         await self.conn.execute('''CREATE TABLE posts (id SERIAL PRIMARY KEY,
                                                  title VARCHAR(60),
                                                  body VARCHAR(2000),
@@ -21,36 +21,47 @@ class DataBase:
 
     async def get_all_posts(self):
         rows = await self.conn.fetch('''SELECT * FROM posts''')
-        return rows
+        return self.to_json(rows)
 
     async def get_post(self, post_id):
-        row = await self.conn.fetch('''SELECT * FROM posts WHERE id=$1''', post_id)
-        return row
+        rows = await self.conn.fetch('''SELECT * FROM posts WHERE id=$1''', post_id)
+        return self.to_json(rows)[0]
 
     async def create_post(self, data):
         try:
-            await self.conn.execute(f'''INSERT INTO posts (title, body, author, created_at) 
-                                       VALUES ($1, $2, $3, TIMESTAMP '{data['created_at']}')''',
-                                    data['title'], data['body'], data['author'])
-            return True
+            # return list with <Record id='post_id'>
+            post_id = await self.conn.fetch(f'''INSERT INTO posts (title, body, author, created_at) 
+                                                VALUES ($1, $2, $3, TIMESTAMP '{data['created_at']}') RETURNING id''',
+                                            data['title'], data['body'], data['author'])
+            data['id'] = post_id.get('id')
+            return data
         except Exception as err:
             print(err)
-            return False
+            return None
 
     async def edit_post(self, data, post_id):
         try:
-            await self.conn.execute(f'''UPDATE posts SET title = $1,
+            await self.conn.fetch(f'''UPDATE posts SET title = $1,
                                                          body = $2,
                                                          author = $3,
                                                          TIMESTAMP '{data['created_at']}'
                                         WHERE id = $4''',
-                                    data['title'], data['body'], data['author'], post_id)
-            return True
+                                  data['title'], data['body'], data['author'], post_id)
+            data['id'] = post_id
+            return data
         except Exception as err:
             print(err)
-            return False
+            return None
+
+    @staticmethod
+    def to_json(data):
+        data_json = []
+        for row in data:
+            post_json = {}
+            for key in row.keys():
+                post_json[key] = row.get(key)
+            data_json.append(post_json)
+        return data_json
 
     async def close(self):
         await self.conn.close()
-
-
