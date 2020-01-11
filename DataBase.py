@@ -23,6 +23,11 @@ class DataBase:
                                                  author INTEGER REFERENCES authors (id) ON DELETE CASCADE,
                                                  created_at TIMESTAMP,
                                                  deleted BOOLEAN DEFAULT FALSE)''')
+        await self._add_test_authors()
+
+    async def _add_test_authors(self):
+        await self.conn.execute('''INSERT INTO authors (author_name) VALUES ('Root')''')
+        await self.conn.execute('''INSERT INTO authors (author_name) VALUES ('Bob')''')
 
     async def get_all_posts(self):
         rows = await self.conn.fetch('''
