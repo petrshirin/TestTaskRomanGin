@@ -14,6 +14,9 @@ class DataBase:
         print(dir(self.conn))
 
     async def init_database(self):
+        await self.conn.execute('''CREATE TABLE authors (id SERIAL PRIMARY KEY,
+                                                         author_name VARCHAR(30))''')
+
         await self.conn.execute('''CREATE TABLE posts (id SERIAL PRIMARY KEY,
                                                  title VARCHAR(60) NOT NULL,
                                                  body VARCHAR(2000) NOT NULL,
@@ -21,27 +24,37 @@ class DataBase:
                                                  created_at TIMESTAMP,
                                                  deleted BOOLEAN DEFAULT FALSE)''')
 
-        await self.conn.execute('''CREATE TABLE authors (id SERIAL PRIMARY KEY,
-                                                         author_name VARCHAR(30))''')
-
     async def get_all_posts(self):
-        rows = await self.conn.fetch('''SELECT (title, body, author_name, created_at) FROM posts LEFT JOIN authors  
-        WHERE deleted = FALSE''')
+        rows = await self.conn.fetch('''
+        SELECT (posts.id, posts.title, posts.body, authors.author_name, posts.created_at) 
+        FROM posts LEFT JOIN authors ON posts.author = authors.id
+        WHERE posts.deleted = FALSE''')
         return self.post_record_to_json(rows)
 
     async def get_post(self, post_id):
-        rows = await self.conn.fetchrow('''SELECT (id, title, body, author_name, created_at) FROM posts LEFT JOIN authors  
-        WHERE id=$1 and deleted = FALSE''', post_id)
+        rows = await self.conn.fetch('''
+        SELECT (posts.id, posts.title, posts.body, authors.author_name, posts.created_at) 
+        FROM posts LEFT JOIN authors ON posts.author = authors.id
+        WHERE posts.id=$1 and posts.deleted = FALSE''', post_id)
+
         if rows == []:
             return []
-        return self.post_record_to_json(rows)
+        return self.post_record_to_json(rows)[0]
 
     async def create_post(self, data):
         try:
+            authors = await self.conn.fetch(f'''SELECT * FROM authors''')
+            author_id = None
+            for author in authors:
+                if author.get('author_name') == data['author']:
+                    author_id = author.get('id')
+            if not author_id:
+                return None
+
             # return list with <Record id='post_id'>
             post_id = await self.conn.fetch(f'''INSERT INTO posts (title, body, author, created_at) 
                                                 VALUES ($1, $2, $3, TIMESTAMP '{data['created_at']}') RETURNING id''',
-                                            data['title'], data['body'], data['author'])
+                                            data['title'], data['body'], author_id)
             data['id'] = post_id[0].get('id')
             return data
         except Exception as err:
@@ -53,14 +66,14 @@ class DataBase:
             authors = await self.conn.fetch(f'''SELECT * FROM authors''')
             author_id = None
             for author in authors:
-                if author.get():
-                    author_id = author.get(data['author'])
+                if author.get('author_name') == data['author']:
+                    author_id = author.get('id')
             if not author_id:
                 return None
             await self.conn.fetch(f'''UPDATE posts SET title = $1,
                                                          body = $2,
                                                          author = $3,
-                                                         TIMESTAMP '{data['created_at']}'
+                                                         created_at = TIMESTAMP '{data['created_at']}' 
                                       WHERE id = $4''',
                                   data['title'], data['body'], author_id, post_id)
             data['id'] = post_id
@@ -82,11 +95,11 @@ class DataBase:
         data_json = []
         for row in data:
             post_json = {}
-            for key in row.keys():
-                if key == 'created_at':
-                    post_json[key] = datetime.datetime.strftime(row.get(key), "%Y-%m-%dT%H:%M:%S.%fZ")
-                    continue
-                post_json[key] = row.get(key)
+            post_json['id'] = row.get('row')[0]
+            post_json['title'] = row.get('row')[1]
+            post_json['body'] = row.get('row')[2]
+            post_json['author'] = row.get('row')[3]
+            post_json['created_at'] = datetime.datetime.strftime(row.get('row')[4], "%Y-%m-%dT%H:%M:%S.%fZ")
             data_json.append(post_json)
         return data_json
 
