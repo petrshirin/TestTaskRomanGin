@@ -51,7 +51,7 @@ async def create_post(request):
     data = await request.json()
     await db.connection(request.app['pool'])
 
-    if not validate_data(data):
+    if not await validate_data(data):
         return web.Response(status=400, text="Некорректные данные")
 
     post = await db.create_post(data)
