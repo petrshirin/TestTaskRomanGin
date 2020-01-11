@@ -21,11 +21,11 @@ class DataBase:
 
     async def get_all_posts(self):
         rows = await self.conn.fetch('''SELECT * FROM posts''')
-        return self.to_json(rows)
+        return self.post_record_to_json(rows)
 
     async def get_post(self, post_id):
         rows = await self.conn.fetch('''SELECT * FROM posts WHERE id=$1''', post_id)
-        return self.to_json(rows)[0]
+        return self.post_record_to_json(rows)[0]
 
     async def create_post(self, data):
         try:
@@ -54,12 +54,13 @@ class DataBase:
             return None
 
     @staticmethod
-    def to_json(data):
+    def post_record_to_json(data):
         data_json = []
         for row in data:
             post_json = {}
             for key in row.keys():
-                post_json[key] = row.get(key)
+                if key == 'created_at':
+                    post_json[key] = row.get(key).fromisoformat()
             data_json.append(post_json)
         return data_json
 
